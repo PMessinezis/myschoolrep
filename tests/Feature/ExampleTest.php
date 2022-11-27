@@ -1,18 +1,3 @@
 <?php
 
-namespace Tests\Feature;
-
-use Tests\TestCase;
-
-class ExampleTest extends TestCase
-{
-    /**
-     * A basic test example.
-     *
-     * @return void
-     */
-    public function testBasicTest()
-    {
-        $this->get(route('home'))->assertSuccessful();
-    }
-}
+test('home route returns 200', fn()=>$this->get(route('home'))->assertSuccessful());

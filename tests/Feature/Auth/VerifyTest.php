@@ -1,65 +1,54 @@
 <?php
 
-namespace Tests\Feature\Auth;
-
 use App\Models\User;
-use Tests\TestCase;
-use Livewire\Livewire;
-use Illuminate\Support\Facades\Hash;
-use App\Providers\RouteServiceProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+
+use function Pest\Livewire\livewire;
+
+uses(RefreshDatabase::class);
+
+use App\Providers\RouteServiceProvider;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Config;
-use Illuminate\Support\Facades\URL;
 
-class VerifyTest extends TestCase
+test('can view verification page', function()
 {
-    use RefreshDatabase;
+    $user = User::factory()->create([
+        'email_verified_at' => null,
+    ]);
 
-    /** @test */
-    public function can_view_verification_page()
-    {
-        $user = User::factory()->create([
-            'email_verified_at' => null,
-        ]);
+    Auth::login($user);
 
-        Auth::login($user);
+    $this->get(route('verification.notice'))
+        ->assertSuccessful()
+        ->assertSeeLivewire('auth.verify');
+});
 
-        $this->get(route('verification.notice'))
-            ->assertSuccessful()
-            ->assertSeeLivewire('auth.verify');
-    }
+test('can resend verification email', function()
+{
+    $user = User::factory()->create();
 
-    /** @test */
-    public function can_resend_verification_email()
-    {
-        $user = User::factory()->create();
+    Livewire::actingAs($user);
 
-        Livewire::actingAs($user);
+    Livewire::test('auth.verify')
+        ->call('resend')
+        ->assertEmitted('resent');
+});
 
-        Livewire::test('auth.verify')
-            ->call('resend')
-            ->assertEmitted('resent');
-    }
+test('can verify', function()
+{
+    $user = User::factory()->create([
+        'email_verified_at' => null,
+    ]);
 
-    /** @test */
-    public function can_verify()
-    {
-        $user = User::factory()->create([
-            'email_verified_at' => null,
-        ]);
+    Auth::login($user);
 
-        Auth::login($user);
+    $url = URL::temporarySignedRoute('verification.verify', Carbon::now()->addMinutes(Config::get('auth.verification.expire', 60)), [
+        'id' => $user->getKey(),
+        'hash' => sha1($user->getEmailForVerification()),
+    ]);
 
-        $url = URL::temporarySignedRoute('verification.verify', Carbon::now()->addMinutes(Config::get('auth.verification.expire', 60)), [
-            'id' => $user->getKey(),
-            'hash' => sha1($user->getEmailForVerification()),
-        ]);
+    $this->get($url)
+        ->assertRedirect(route('home'));
 
-        $this->get($url)
-            ->assertRedirect(route('home'));
-
-        $this->assertTrue($user->hasVerifiedEmail());
-    }
-}
+    $this->assertTrue($user->hasVerifiedEmail());
+});

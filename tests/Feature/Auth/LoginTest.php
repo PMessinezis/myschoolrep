@@ -1,107 +1,92 @@
 <?php
 
-namespace Tests\Feature\Auth;
-
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
-use Livewire\Livewire;
-use Tests\TestCase;
 
-class LoginTest extends TestCase
+use function Pest\Livewire\livewire;
+
+uses(RefreshDatabase::class);
+
+test('can view login page', function()
 {
-    use RefreshDatabase;
+    $this->get(route('login'))
+        ->assertSuccessful()
+        ->assertSeeLivewire('auth.login');
+});
 
-    /** @test */
-    public function can_view_login_page()
-    {
-        $this->get(route('login'))
-            ->assertSuccessful()
-            ->assertSeeLivewire('auth.login');
-    }
+test('is redirected if already logged in', function()
+{
+    $user = User::factory()->create();
 
-    /** @test */
-    public function is_redirected_if_already_logged_in()
-    {
-        $user = User::factory()->create();
+    $this->be($user);
 
-        $this->be($user);
+    $this->get(route('login'))
+        ->assertRedirect(route('home'));
+});
 
-        $this->get(route('login'))
-            ->assertRedirect(route('home'));
-    }
+test('a user can login', function()
+{
+    $user = User::factory()->create(['password' => Hash::make('password')]);
 
-    /** @test */
-    public function a_user_can_login()
-    {
-        $user = User::factory()->create(['password' => Hash::make('password')]);
+    livewire('auth.login')
+        ->set('email', $user->email)
+        ->set('password', 'password')
+        ->call('authenticate');
 
-        Livewire::test('auth.login')
-            ->set('email', $user->email)
-            ->set('password', 'password')
-            ->call('authenticate');
+    $this->assertAuthenticatedAs($user);
+});
 
-        $this->assertAuthenticatedAs($user);
-    }
+test('is redirected to the home page after login', function()
+{
+    $user = User::factory()->create(['password' => Hash::make('password')]);
 
-    /** @test */
-    public function is_redirected_to_the_home_page_after_login()
-    {
-        $user = User::factory()->create(['password' => Hash::make('password')]);
+    livewire('auth.login')
+        ->set('email', $user->email)
+        ->set('password', 'password')
+        ->call('authenticate')
+        ->assertRedirect(route('home'));
+});
 
-        Livewire::test('auth.login')
-            ->set('email', $user->email)
-            ->set('password', 'password')
-            ->call('authenticate')
-            ->assertRedirect(route('home'));
-    }
+test('email is required', function()
+{
+    $user = User::factory()->create(['password' => Hash::make('password')]);
 
-    /** @test */
-    public function email_is_required()
-    {
-        $user = User::factory()->create(['password' => Hash::make('password')]);
+    livewire('auth.login')
+        ->set('password', 'password')
+        ->call('authenticate')
+        ->assertHasErrors(['email' => 'required']);
+});
 
-        Livewire::test('auth.login')
-            ->set('password', 'password')
-            ->call('authenticate')
-            ->assertHasErrors(['email' => 'required']);
-    }
+test('email must be valid email', function()
+{
+    $user = User::factory()->create(['password' => Hash::make('password')]);
 
-    /** @test */
-    public function email_must_be_valid_email()
-    {
-        $user = User::factory()->create(['password' => Hash::make('password')]);
+    livewire('auth.login')
+        ->set('email', 'invalid-email')
+        ->set('password', 'password')
+        ->call('authenticate')
+        ->assertHasErrors(['email' => 'email']);
+});
 
-        Livewire::test('auth.login')
-            ->set('email', 'invalid-email')
-            ->set('password', 'password')
-            ->call('authenticate')
-            ->assertHasErrors(['email' => 'email']);
-    }
+test('password is required', function()
+{
+    $user = User::factory()->create(['password' => Hash::make('password')]);
 
-    /** @test */
-    public function password_is_required()
-    {
-        $user = User::factory()->create(['password' => Hash::make('password')]);
+    livewire('auth.login')
+        ->set('email', $user->email)
+        ->call('authenticate')
+        ->assertHasErrors(['password' => 'required']);
+});
 
-        Livewire::test('auth.login')
-            ->set('email', $user->email)
-            ->call('authenticate')
-            ->assertHasErrors(['password' => 'required']);
-    }
+test('bad login attempt shows message', function()
+{
+    $user = User::factory()->create();
 
-    /** @test */
-    public function bad_login_attempt_shows_message()
-    {
-        $user = User::factory()->create();
+    livewire('auth.login')
+        ->set('email', $user->email)
+        ->set('password', 'bad-password')
+        ->call('authenticate')
+        ->assertHasErrors('email');
 
-        Livewire::test('auth.login')
-            ->set('email', $user->email)
-            ->set('password', 'bad-password')
-            ->call('authenticate')
-            ->assertHasErrors('email');
-
-        $this->assertFalse(Auth::check());
-    }
-}
+    $this->assertFalse(Auth::check());
+});
